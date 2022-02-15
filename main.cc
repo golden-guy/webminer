@@ -438,51 +438,57 @@ void mining_thread_func(int id)
 
 #ifdef USE_OPENSSL_ASM
         // OpenSSL needs a seperate context for midstate
-        SHA256_CTX sha256_mid, sha256_final;
+        SHA256_CTX sha256_mid, sha256_prefinal, sha256_final;
         SHA256_Init(&sha256_mid);
+        SHA256_Init(&sha256_prefinal);
         SHA256_Init(&sha256_final);
         SHA256_Update(&sha256_mid, (unsigned char*)prefix_b64.data(), prefix_b64.size());
 #else
-        CSHA256 midstate;
+        CSHA256 midstate, finalstate;
         midstate.Write((unsigned char*)prefix_b64.data(), prefix_b64.size());
 #endif
 
         uint256 hash;
         for (int i = 0; i < 1000; ++i) {
-            for (int j = 0; j < 1000; ++j) {
-                ++g_attempts;
+            for (int j = 0; j < 1000; j += 8) {
+                g_attempts += 8;
 
 #ifdef USE_OPENSSL_ASM
                 // (Re-)set the pointer to midstate before hashing the nonce
-                sha256_final = sha256_mid;
-                SHA256_Update(&sha256_final, (unsigned char*)nonces + 4*j, 4);
-                SHA256_Update(&sha256_final, (unsigned char*)nonces + 4*i, 4);
-                SHA256_Update(&sha256_final, (unsigned char*)final, 4);
-                SHA256_Final(hash.begin(), &sha256_final);
+                sha256_prefinal = sha256_mid;
+                SHA256_Update(&sha256_prefinal, (unsigned char*)nonces + 4*i, 4);
+                for (int k = 0; k < 8; ++k) {
+                    sha256_final = sha256_prefinal;
+                    SHA256_Update(&sha256_final, (unsigned char*)nonces + 4*j + 4*k, 4);
+                    SHA256_Update(&sha256_final, (unsigned char*)final, 4);
+                    SHA256_Final(hash.begin(), &sha256_final);
 #else
-                CSHA256(midstate)
-                    .Write((const unsigned char*)nonces + 4*j, 4)
-                    .Write((const unsigned char*)nonces + 4*i, 4)
-                    .Write((const unsigned char*)final, 4)
-                    .Finalize(hash.begin());
+                finalstate = CSHA256(midstate)
+                    .Write((const unsigned char*)nonces + 4*i, 4);
+                for (int k = 0; k < 8; ++k) {
+                    CSHA256(finalstate)
+                        .Write((const unsigned char*)nonces + 4*j + 4*k, 4)
+                        .Write((const unsigned char*)final, 4)
+                        .Finalize(hash.begin());
 #endif
 
-                if (!(*(const uint16_t*)hash.begin()) && check_proof_of_work(hash, g_difficulty)) {
-                    std::string webcash = to_string(keep);
-                    std::string work = absl::StrCat(prefix_b64, absl::string_view(nonces + 4*j, 4), absl::string_view(nonces + 4*i, 4), final);
-                    std::cout << "GOT SOLUTION!!! " << work << " " << absl::StrCat("0x" + absl::BytesToHexString(absl::string_view((const char*)hash.begin(), 32))) << " " << to_string(keep) << std::endl;
+                    if (!(*(const uint16_t*)hash.begin()) && check_proof_of_work(hash, g_difficulty)) {
+                        std::string webcash = to_string(keep);
+                        std::string work = absl::StrCat(prefix_b64, absl::string_view(nonces + 4*i, 4), absl::string_view(nonces + 4*j + 4*k, 4), final);
+                        std::cout << "GOT SOLUTION!!! " << work << " " << absl::StrCat("0x" + absl::BytesToHexString(absl::string_view((const char*)hash.begin(), 32))) << " " << to_string(keep) << std::endl;
 
-                    // Add solution to the queue, and wake up the server
-                    // communication thread.
-                    {
-                        const std::lock_guard<std::mutex> lock(g_state_mutex);
-                        g_solutions.emplace_back(hash, work, webcash);
+                        // Add solution to the queue, and wake up the server
+                        // communication thread.
+                        {
+                            const std::lock_guard<std::mutex> lock(g_state_mutex);
+                            g_solutions.emplace_back(hash, work, webcash);
+                        }
+                        g_update_thread_cv.notify_all();
+
+                        // Generate new Webcash secrets, so that we don't reuse a secret
+                        // if we happen to generate two solutions back-to-back.
+                        break;
                     }
-                    g_update_thread_cv.notify_all();
-
-                    // Generate new Webcash secrets, so that we don't reuse a secret
-                    // if we happen to generate two solutions back-to-back.
-                    break;
                 }
             }
         }
