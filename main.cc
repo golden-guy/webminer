@@ -418,6 +418,13 @@ void mining_thread_func(int id)
     ;
     static const char final[] = "fQ==";
 
+    // Interleave nonces with final char to speed up hashing
+    char final_nonces[8000];
+    for (int i = 0; i < 1000; ++i) {
+        memcpy(final_nonces + 8*i, nonces + 4*i, 4);
+        memcpy(final_nonces + 8*i + 4, final, 4);
+    }
+
     bool done = false;
     while (!done) {
         SecretWebcash keep;
@@ -456,25 +463,23 @@ void mining_thread_func(int id)
 #ifdef USE_OPENSSL_ASM
                 // (Re-)set the pointer to midstate before hashing the nonce
                 sha256_prefinal = sha256_mid;
-                SHA256_Update(&sha256_prefinal, (unsigned char*)nonces + 4*i, 4);
+                SHA256_Update(&sha256_prefinal, (const unsigned char*)final_nonces + 8*i, 4);
                 for (int k = 0; k < 8; ++k) {
                     sha256_final = sha256_prefinal;
-                    SHA256_Update(&sha256_final, (unsigned char*)nonces + 4*j + 4*k, 4);
-                    SHA256_Update(&sha256_final, (unsigned char*)final, 4);
+                    SHA256_Update(&sha256_final, (const unsigned char*)final_nonces + 8*j + 8*k, 8);
                     SHA256_Final(hash.begin(), &sha256_final);
 #else
                 finalstate = CSHA256(midstate)
-                    .Write((const unsigned char*)nonces + 4*i, 4);
+                    .Write((const unsigned char*)final_nonces + 8*i, 4);
                 for (int k = 0; k < 8; ++k) {
                     CSHA256(finalstate)
-                        .Write((const unsigned char*)nonces + 4*j + 4*k, 4)
-                        .Write((const unsigned char*)final, 4)
+                        .Write((const unsigned char*)final_nonces + 8*j + 8*k, 8)
                         .Finalize(hash.begin());
 #endif
 
                     if (!(*(const uint16_t*)hash.begin()) && check_proof_of_work(hash, g_difficulty)) {
                         std::string webcash = to_string(keep);
-                        std::string work = absl::StrCat(prefix_b64, absl::string_view(nonces + 4*i, 4), absl::string_view(nonces + 4*j + 4*k, 4), final);
+                        std::string work = absl::StrCat(prefix_b64, absl::string_view(final_nonces + 8*i, 4), absl::string_view(final_nonces + 8*j + 8*k, 8));
                         std::cout << "GOT SOLUTION!!! " << work << " " << absl::StrCat("0x" + absl::BytesToHexString(absl::string_view((const char*)hash.begin(), 32))) << " " << to_string(keep) << std::endl;
 
                         // Add solution to the queue, and wake up the server
