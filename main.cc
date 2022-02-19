@@ -456,22 +456,23 @@ void mining_thread_func(int id)
 #endif
 
         uint256 hash;
+        int batch_size = 64;
         for (int i = 0; i < 1000; ++i) {
-            for (int j = 0; j < 1000; j += 8) {
-                g_attempts += 8;
+            for (int j = 0; j < 1000; j += batch_size) {
+                g_attempts += batch_size;
 
 #ifdef USE_OPENSSL_ASM
                 // (Re-)set the pointer to midstate before hashing the nonce
                 sha256_prefinal = sha256_mid;
                 SHA256_Update(&sha256_prefinal, (const unsigned char*)final_nonces + 8*i, 4);
-                for (int k = 0; k < 8; ++k) {
+                for (int k = 0; k < batch_size; ++k) {
                     sha256_final = sha256_prefinal;
                     SHA256_Update(&sha256_final, (const unsigned char*)final_nonces + 8*j + 8*k, 8);
                     SHA256_Final(hash.begin(), &sha256_final);
 #else
                 finalstate = CSHA256(midstate)
                     .Write((const unsigned char*)final_nonces + 8*i, 4);
-                for (int k = 0; k < 8; ++k) {
+                for (int k = 0; k < batch_size; ++k) {
                     CSHA256(finalstate)
                         .Write((const unsigned char*)final_nonces + 8*j + 8*k, 8)
                         .Finalize(hash.begin());
