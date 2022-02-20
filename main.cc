@@ -218,6 +218,7 @@ absl::Time g_next_settings_fetch{absl::UnixEpoch()};
 
 ABSL_FLAG(std::string, webcashlog, "webcash.log", "filename to place generated webcash claim codes");
 ABSL_FLAG(std::string, orphanlog, "orphans.log", "filename to place solved proof-of-works the server rejects, and their associated webcash claim codes");
+ABSL_FLAG(unsigned, batch_size, 250, "batch size to use for computing hashes, must be a factor of 1000");
 
 void update_thread_func()
 {
@@ -456,7 +457,8 @@ void mining_thread_func(int id)
 #endif
 
         uint256 hash;
-        int batch_size = 64;
+        int batch_size = absl::GetFlag(FLAGS_batch_size);
+
         for (int i = 0; i < 1000; ++i) {
             for (int j = 0; j < 1000; j += batch_size) {
                 g_attempts += batch_size;
@@ -507,6 +509,11 @@ int main(int argc, char **argv)
 {
     absl::SetProgramUsageMessage(absl::StrCat("Webcash mining daemon.\n", argv[0]));
     absl::ParseCommandLine(argc, argv);
+    int batch_size = absl::GetFlag(FLAGS_batch_size);
+    if (batch_size < 8 || batch_size > 500 || 1000 % batch_size != 0) {
+        std::cerr << "Error: --batch_size must be between 8 and 500 and a factor of 1000" << std::endl;
+        return 1;
+    }
     int num_workers = absl::GetFlag(FLAGS_workers);
     if (num_workers > 256) {
         std::cerr << "Error: --workers cannot be larger than 256" << std::endl;
@@ -569,7 +576,7 @@ int main(int argc, char **argv)
     // Launch worker threads
     std::vector<std::thread> mining_threads;
     mining_threads.reserve(num_workers);
-    std::cout << "Spawning " << num_workers << " worker threads" << std::endl;
+    std::cout << "Spawning " << num_workers << " worker threads with batch size " << batch_size << std::endl;
     for (int i = 0; i < num_workers; ++i) {
         mining_threads.emplace_back(mining_thread_func, i);
     }
