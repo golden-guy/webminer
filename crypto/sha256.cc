@@ -669,16 +669,15 @@ CSHA256& CSHA256::Write(const unsigned char* data, size_t len)
     return *this;
 }
 
-void CSHA256::WriteAndFinalize8(const unsigned char* nonce1, const unsigned char* nonce2, const unsigned char* final, unsigned char hashes[OUTPUT_SIZE*8])
+void CSHA256::WriteAndFinalize8(const unsigned char* nonce1, const unsigned char* nonce2, unsigned char hashes[OUTPUT_SIZE*8])
 {
     std::array<unsigned char, 8*64> blocks = {};
     for (int i = 0; i < 8; ++i) {
         std::copy(nonce1, nonce1 + 4, blocks.begin() + i*64 + 0);
-        std::copy(nonce2, nonce2 + 4, blocks.begin() + i*64 + 4);
-        std::copy(final, final + 4, blocks.begin() + i*64 + 8);
+        std::copy(nonce2, nonce2 + 8, blocks.begin() + i*64 + 4);
         blocks[i*64 + 12] = 0x80; // padding byte
         WriteBE64(blocks.data() + i*64 + 56, (bytes + 12) << 3);
-        nonce2 += 4;
+        nonce2 += 8;
     }
     SHA256Midstate(hashes, s, blocks.data(), 8);
 }

@@ -475,7 +475,7 @@ void mining_thread_func(int id)
 #else
                 for (int k = 0; k < batch_size; k += 8) {
                     CSHA256(midstate)
-                        .WriteAndFinalize8((const unsigned char*)nonces + 4*i, (const unsigned char*)nonces + 4*j + 4*k, (const unsigned char*)final, hashes + k*32);
+                        .WriteAndFinalize8((const unsigned char*)nonces + 4*i, (const unsigned char*)final_nonces + 8*j + 8*k, hashes + k*32);
                 }
 #endif
                 for (int k = 0; k < batch_size; ++k) {

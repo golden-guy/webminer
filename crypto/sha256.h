@@ -26,7 +26,7 @@ public:
     CSHA256();
     CSHA256& Write(const unsigned char* data, size_t len);
     void Finalize(unsigned char hash[OUTPUT_SIZE]);
-    void WriteAndFinalize8(const unsigned char* nonce1, const unsigned char* nonce2, const unsigned char* final, unsigned char hash[OUTPUT_SIZE*8]);
+    void WriteAndFinalize8(const unsigned char* nonce1, const unsigned char* nonce2, unsigned char hash[OUTPUT_SIZE*8]);
     CSHA256& Reset();
 };
 
