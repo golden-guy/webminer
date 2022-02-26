@@ -218,7 +218,7 @@ absl::Time g_next_settings_fetch{absl::UnixEpoch()};
 
 ABSL_FLAG(std::string, webcashlog, "webcash.log", "filename to place generated webcash claim codes");
 ABSL_FLAG(std::string, orphanlog, "orphans.log", "filename to place solved proof-of-works the server rejects, and their associated webcash claim codes");
-ABSL_FLAG(unsigned, batch_size, 250, "batch size to use for computing hashes, must be a factor of 1000");
+ABSL_FLAG(unsigned, batch_size, 200, "batch size to use for computing hashes, possible values are 8, 40 and 200");
 
 void update_thread_func()
 {
@@ -512,8 +512,8 @@ int main(int argc, char **argv)
     absl::SetProgramUsageMessage(absl::StrCat("Webcash mining daemon.\n", argv[0]));
     absl::ParseCommandLine(argc, argv);
     int batch_size = absl::GetFlag(FLAGS_batch_size);
-    if (batch_size < 8 || batch_size > 500 || 1000 % batch_size != 0) {
-        std::cerr << "Error: --batch_size must be between 8 and 500 and a factor of 1000" << std::endl;
+    if (!(batch_size == 8 || batch_size == 40 || batch_size == 200)) {
+        std::cerr << "Error: --batch_size must be set to 8, 40 or 200" << std::endl;
         return 1;
     }
     int num_workers = absl::GetFlag(FLAGS_workers);
